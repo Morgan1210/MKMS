@@ -1,63 +1,94 @@
-import os
-import faiss
+import os, time, re, hashlib, sqlite3
 import numpy as np
+import faiss
 from sentence_transformers import SentenceTransformer
 
-# ====== 配置 ======
-MODEL_NAME = "all-MiniLM-L6-v2"
+DB_PATH = "mkms.db"
 INDEX_PATH = "mkms.index"
-CHUNK_SIZE = 600  # 每块字符数
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
-# ====== 加载模型 ======
-print("Loading embedding model...")
-model = SentenceTransformer(MODEL_NAME)
+TARGET_CHUNK = 600  # 你先 status quo，后面再调
+BATCH_SIZE = 64
 
-# ====== 文本切块 ======
-def chunk_text(text, chunk_size=CHUNK_SIZE):
-    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+def smart_chunks(text: str, target=TARGET_CHUNK):
+    parts = [p.strip() for p in re.split(r"\n\s*\n+", text) if p.strip()]
+    chunks, buf = [], ""
+    for p in parts:
+        if len(buf) + len(p) + 1 <= target:
+            buf = (buf + "\n" + p).strip()
+        else:
+            if buf:
+                chunks.append(buf)
+            buf = p
+    if buf:
+        chunks.append(buf)
+    return chunks
 
+def sha1(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()
 
-# ====== 构建索引 ======
-def build_index(text):
-    chunks = chunk_text(text)
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS chunks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        hash TEXT UNIQUE,
+        text TEXT NOT NULL,
+        created_at INTEGER,
+        source TEXT
+    )
+    """)
+    conn.commit()
+    return conn
 
-    print(f"Total chunks: {len(chunks)}")
+def upsert_chunks(conn, chunks, source):
+    now = int(time.time())
+    ids, new_texts = [], []
+    for t in chunks:
+        h = sha1(t)
+        try:
+            cur = conn.execute(
+                "INSERT INTO chunks(hash, text, created_at, source) VALUES(?,?,?,?)",
+                (h, t, now, source)
+            )
+            cid = cur.lastrowid
+            ids.append(cid)
+            new_texts.append(t)
+        except sqlite3.IntegrityError:
+            # 已存在则取旧 id；（status quo：我们重建索引时也会包含它）
+            cur = conn.execute("SELECT id FROM chunks WHERE hash=?", (h,))
+            cid = cur.fetchone()[0]
+            ids.append(cid)
+            new_texts.append(t)  # status quo：全量重建索引用
+    conn.commit()
+    return ids, new_texts
 
-    embeddings = model.encode(chunks, convert_to_numpy=True)
-
-    dim = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dim)
-    index.add(embeddings)
-
+def build_faiss_index(ids, vecs):
+    dim = vecs.shape[1]
+    base = faiss.IndexFlatIP(dim)         # 归一化后点积=cosine，速度快
+    index = faiss.IndexIDMap2(base)       # 关键：向量 id 映射到 SQLite id
+    index.add_with_ids(vecs, np.array(ids, dtype=np.int64))
     faiss.write_index(index, INDEX_PATH)
 
-    print("Index saved:", INDEX_PATH)
+def main():
+    text = open("mkms_doc.txt", "r", encoding="utf-8").read()
+    chunks = smart_chunks(text)
 
-    return chunks, index
+    conn = init_db()
+    ids, texts_for_index = upsert_chunks(conn, chunks, source="mkms_doc.txt")
+    conn.close()
 
-# ====== 查询 ======
-def search(query, chunks, index, top_k=3):
-    query_vec = model.encode([query], convert_to_numpy=True)
-    distances, indices = index.search(query_vec, top_k)
+    model = SentenceTransformer(MODEL_NAME)
+    vecs = model.encode(
+        texts_for_index,
+        batch_size=BATCH_SIZE,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+        show_progress_bar=True
+    ).astype(np.float32)
 
-    results = []
-    for idx in indices[0]:
-        results.append(chunks[idx])
-
-    return results
-
+    build_faiss_index(ids, vecs)
+    print(f"OK: chunks={len(ids)}  index={INDEX_PATH}  db={DB_PATH}")
 
 if __name__ == "__main__":
-
-    # 读取你的 MKMS 文档
-    with open("mkms_doc.txt", "r", encoding="utf-8") as f:
-        text = f.read()
-
-    chunks, index = build_index(text)
-
-    # 测试查询
-    print("\nTest query:")
-    results = search("TSLY理论崩溃的影响是什么？", chunks, index)
-
-    for r in results:
-        print("\n---\n", r)
+    main()
