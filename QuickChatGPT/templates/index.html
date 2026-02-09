@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简单H5聊天</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 600px;
+            height: 80vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 头部 */
+        .chat-header {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        /* 消息区域 */
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f5f7fb;
+        }
+
+        /* 消息气泡 */
+        .message {
+            margin-bottom: 15px;
+            max-width: 70%;
+            clear: both;
+        }
+
+        .message-content {
+            padding: 12px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            max-width: 100%;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+
+        .receive .message-content {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-top-left-radius: 4px;
+        }
+
+        .send {
+            float: right;
+        }
+
+        .send .message-content {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .send .message-time {
+            text-align: right;
+        }
+
+        /* 输入区域 */
+        .chat-input {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input textarea {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            padding: 12px 20px;
+            font-size: 1rem;
+            resize: none;
+            outline: none;
+            transition: border-color 0.3s;
+            max-height: 100px;
+        }
+
+        .chat-input textarea:focus {
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* 滚动条美化 */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 10px;
+        }
+
+        /* 响应式 */
+        @media (max-width: 600px) {
+            .chat-container {
+                height: 90vh;
+                border-radius: 10px;
+            }
+
+            .message {
+                max-width: 85%;
+            }
+        }
+
+        /* 消息动画 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message {
+            animation: fadeIn 0.3s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <!-- 头部 -->
+        <div class="chat-header">
+            MKMS
+        </div>
+
+        <!-- 消息区域 -->
+        <div class="chat-messages" id="chatMessages">
+
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="chat-input">
+            <textarea id="messageInput" placeholder="输入消息..." rows="1"></textarea>
+            <button class="send-btn" id="sendBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // 自动调整输入框高度
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // 发送消息
+        function sendMessage() {
+            const messageText = messageInput.value.trim();
+            if (messageText === '') return;
+
+            // 创建发送的消息
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message send';
+
+            const time = new Date();
+            const timeString = time.getHours().toString().padStart(2, '0') + ':' +
+                              time.getMinutes().toString().padStart(2, '0');
+
+            const content = document.createElement('div');
+content.className = 'message-content';
+content.textContent = messageText;
+
+const t = document.createElement('div');
+t.className = 'message-time';
+t.textContent = timeString;
+
+messageDiv.appendChild(content);
+messageDiv.appendChild(t);
+
+            // 添加到消息区域
+            chatMessages.appendChild(messageDiv);
+
+            // 清空输入框并重置高度
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // 滚动到底部
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // 模拟回复（1-2秒后）
+// 调后端
+fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: messageText })
+})
+.then(res => res.json())
+.then(data => {
+    if (!data.ok) throw new Error(data.error || 'unknown error');
+    sendReplyText(data.reply || '（无回复）');
+})
+.catch(err => {
+    sendReplyText('后端报错：' + err.message);
+});        }
+
+        // 模拟回复
+        function sendReplyText(text) {
+    const replyDiv = document.createElement('div');
+    replyDiv.className = 'message receive';
+
+    const time = new Date();
+    const timeString = time.getHours().toString().padStart(2, '0') + ':' +
+                      time.getMinutes().toString().padStart(2, '0');
+
+    replyDiv.innerHTML = `
+        <div class="message-content">${text}</div>
+        <div class="message-time">${timeString}</div>
+    `;
+
+    chatMessages.appendChild(replyDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+        // 事件监听
+        sendBtn.addEventListener('click', sendMessage);
+
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // 初始滚动到底部
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    </script>
+</body>
+</html>
