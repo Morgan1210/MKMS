@@ -96,7 +96,13 @@ def api_chat():
     messages = [{"role": "system", "content": content}]
     messages.extend(list(history))
 
+    print("【输入】：", base)
+    print("【记忆】：", retrieved_context)
+
     reply = call_deepseek_api(messages)
+
+    print("【输出】：", reply)
+
     history.append({"role": "assistant", "content": reply})
 
     return jsonify({"ok": True, "reply": reply})
