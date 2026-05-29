@@ -237,7 +237,7 @@ def unified_search(query: str, **kwargs) -> List[Dict]:
 
 
 if __name__ == "__main__":
-    query = f"Donald Guilmette"
+    query = f"Darren Cadeau"
 
     r = UnifiedRetriever()
 
