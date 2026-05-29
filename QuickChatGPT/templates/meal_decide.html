@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MKMS · 吃什么</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100dvh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        /* 加载页面 - 完全复刻 MKMS 风格 */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s;
+            color: white;
+            text-align: center;
+        }
+        #loading-overlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loading-content {
+            animation: pulse 2s infinite;
+        }
+        .loading-content p {
+            font-size: 1.2rem;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+        .loading-content small {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 1rem;
+            display: block;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        /* 主界面 - 卡片容器 */
+        #main-content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #f8f9fc;
+            opacity: 0;
+            transition: opacity 0.3s;
+            position: relative;
+        }
+        #main-content.visible {
+            opacity: 1;
+        }
+
+        /* 状态栏 */
+        .status-bar {
+            padding: 20px 20px 10px;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #667eea;
+            font-weight: 500;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+
+        /* 卡片堆栈容器 */
+        .cards-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            margin: 10px;
+        }
+
+        /* 单张卡片 */
+        .card {
+            position: absolute;
+            width: 90%;
+            max-width: 380px;
+            height: 70vh;
+            max-height: 600px;
+            background: white;
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            overflow: hidden;
+            transition: transform 0.3s, opacity 0.3s;
+            cursor: grab;
+            user-select: none;
+            touch-action: pan-y;
+            will-change: transform;
+            display: flex;
+            flex-direction: column;
+        }
+        .card:active {
+            cursor: grabbing;
+        }
+
+        /* 卡片图片区 */
+        .card-image {
+            height: 45%;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        .card-image::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(to top, white, transparent);
+        }
+
+        /* 卡片内容区 */
+        .card-content {
+            flex: 1;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .restaurant-name {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #333;
+            line-height: 1.2;
+        }
+        .restaurant-name a {
+            color: inherit;
+            text-decoration: none;
+        }
+        .restaurant-name a:hover {
+            text-decoration: underline;
+        }
+        .restaurant-meta {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            color: #666;
+            font-size: 15px;
+        }
+        .restaurant-rating {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .restaurant-rating span {
+            color: #f5b342;
+            font-size: 18px;
+        }
+        .restaurant-address {
+            color: #888;
+            font-size: 15px;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        .restaurant-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            color: #999;
+            font-size: 14px;
+        }
+        .restaurant-distance {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* 划卡指示器 */
+        .swipe-indicator {
+            position: absolute;
+            top: 45%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: bold;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 20;
+        }
+        .swipe-indicator.like {
+            color: #4caf50;
+            transform: translate(calc(-50% + 30px), -50%) rotate(15deg);
+        }
+        .swipe-indicator.nope {
+            color: #f44336;
+            transform: translate(calc(-50% - 30px), -50%) rotate(-15deg);
+        }
+        .swipe-indicator.visible {
+            opacity: 0.9;
+        }
+
+        /* 无卡片时 */
+        .no-more {
+            text-align: center;
+            color: #999;
+            font-size: 18px;
+            padding: 40px;
+        }
+
+        /* 按钮（备用） */
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            margin: 20px;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- MKMS 风格加载页 -->
+    <div id="loading-overlay">
+        <div class="loading-content">
+            <p>🍽️ 觅食中</p>
+            <small>偷偷获取你的位置...</small>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="main-content">
+        <div class="status-bar" id="statusBar">
+            📡 正在寻找附近的美食...
+        </div>
+
+        <div class="cards-container" id="cardsContainer">
+            <!-- 卡片会被 JS 动态插入 -->
+        </div>
+
+        <!-- 备用按钮（万一自动加载失败） -->
+        <button class="refresh-btn" id="refreshBtn" style="display: none;">🔄 重新寻找</button>
+    </div>
+
+    <script>
+        // ==================== 初始化 ====================
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const mainContent = document.getElementById('main-content');
+        const cardsContainer = document.getElementById('cardsContainer');
+        const statusBar = document.getElementById('statusBar');
+        const refreshBtn = document.getElementById('refreshBtn');
+
+        let restaurants = [];
+        let currentIndex = 0;
+        let isDragging = false;
+        let startX, startY, currentX, currentY;
+        let cardElement = null;
+
+        // 隐藏加载页（模仿 MKMS）
+        setTimeout(() => {
+            loadingOverlay.classList.add('fade-out');
+        }, 800);
+
+        // ==================== 自动定位 ====================
+        function startGeolocation() {
+            statusBar.innerText = '📍 正在定位...';
+
+            if (!navigator.geolocation) {
+                statusBar.innerText = '❌ 浏览器不支持定位';
+                refreshBtn.style.display = 'block';
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+
+                    statusBar.innerText = `📍 定位成功 · 正在搜索附近餐厅...`;
+
+                    try {
+                        const response = await fetch('/meal_decide', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lat, lng, radius: 5000 })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.ok && data.restaurants.length > 0) {
+                            restaurants = data.restaurants;
+                            statusBar.innerText = `🍽️ 找到 ${restaurants.length} 家餐厅 · 划起来吧`;
+                            mainContent.classList.add('visible');
+                            showNextCard();
+                        } else {
+                            statusBar.innerText = '😢 附近没找到餐厅';
+                            refreshBtn.style.display = 'block';
+                        }
+                    } catch (error) {
+                        statusBar.innerText = '❌ 加载失败';
+                        refreshBtn.style.display = 'block';
+                    }
+                },
+                (error) => {
+                    let msg = '';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED: msg = '拒绝了位置权限'; break;
+                        case error.POSITION_UNAVAILABLE: msg = '位置不可用'; break;
+                        case error.TIMEOUT: msg = '定位超时'; break;
+                        default: msg = '未知错误';
+                    }
+                    statusBar.innerText = `❌ 定位失败: ${msg}`;
+                    refreshBtn.style.display = 'block';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        // ==================== Tinder 划卡逻辑 ====================
+        function showNextCard() {
+            if (currentIndex >= restaurants.length) {
+                cardsContainer.innerHTML = '<div class="no-more">🎉 今天吃到这里吧</div>';
+                return;
+            }
+
+            const restaurant = restaurants[currentIndex];
+
+            // 创建卡片
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.dataset.index = currentIndex;
+
+            // 构建卡片内容
+            const imageUrl = restaurant.photo || 'https://via.placeholder.com/400x300?text=No+Image';
+            const rating = restaurant.rating !== '暂无' ? restaurant.rating : '新店';
+            const cost = restaurant.cost !== '暂无' ? `¥${restaurant.cost}` : '人均未知';
+
+            card.innerHTML = `
+                <div class="card-image" style="background-image: url('${imageUrl}')"></div>
+                <div class="card-content">
+                    <div>
+                        <div class="restaurant-name">
+                            <a href="${restaurant.appLink || restaurant.webLink}" target="_blank" rel="noopener noreferrer">${restaurant.name}</a>
+                        </div>
+                        <div class="restaurant-meta">
+                            <div class="restaurant-rating">
+                                <span>⭐</span> ${rating}
+                            </div>
+                            <div>💰 ${cost}</div>
+                        </div>
+                        <div class="restaurant-address">${restaurant.address}</div>
+                    </div>
+                    <div class="restaurant-footer">
+                        <div class="restaurant-distance">📍 ${restaurant.distance}</div>
+                        <div>📞 ${restaurant.phone}</div>
+                    </div>
+                </div>
+            `;
+
+            // 清空容器，放新卡片
+            cardsContainer.innerHTML = '';
+            cardsContainer.appendChild(card);
+
+            cardElement = card;
+            attachDragListeners(card);
+        }
+
+        function attachDragListeners(card) {
+            card.addEventListener('touchstart', handleDragStart, { passive: false });
+            card.addEventListener('touchend', handleDragEnd);
+            card.addEventListener('touchmove', handleDragMove, { passive: false });
+
+            card.addEventListener('mousedown', handleDragStart);
+            card.addEventListener('mouseup', handleDragEnd);
+            card.addEventListener('mousemove', handleDragMove);
+            card.addEventListener('mouseleave', handleDragEnd);
+        }
+
+        function handleDragStart(e) {
+            if (isDragging) return;
+
+            e.preventDefault();
+
+            const clientX = e.type.startsWith('touch') ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type.startsWith('touch') ? e.touches[0].clientY : e.clientY;
+
+            startX = clientX;
+            startY = clientY;
+            currentX = 0;
+            currentY = 0;
+            isDragging = true;
+
+            cardElement.style.transition = 'none';
+        }
+
+        function handleDragMove(e) {
+            if (!isDragging || !cardElement) return;
+
+            e.preventDefault();
+
+            const clientX = e.type.startsWith('touch') ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type.startsWith('touch') ? e.touches[0].clientY : e.clientY;
+
+            const deltaX = clientX - startX;
+            const deltaY = clientY - startY;
+
+            currentX = deltaX;
+            currentY = deltaY;
+
+            // 限制最大偏移
+            const limitedX = Math.min(Math.max(deltaX, -150), 150);
+            const rotate = limitedX * 0.1;
+
+            cardElement.style.transform = `translate(${limitedX}px, ${deltaY * 0.2}px) rotate(${rotate}deg)`;
+
+            // 显示指示器
+            const likeIndicator = document.querySelector('.swipe-indicator.like') || createIndicator('like');
+            const nopeIndicator = document.querySelector('.swipe-indicator.nope') || createIndicator('nope');
+
+            if (limitedX > 30) {
+                likeIndicator.classList.add('visible');
+                nopeIndicator.classList.remove('visible');
+            } else if (limitedX < -30) {
+                nopeIndicator.classList.add('visible');
+                likeIndicator.classList.remove('visible');
+            } else {
+                likeIndicator.classList.remove('visible');
+                nopeIndicator.classList.remove('visible');
+            }
+        }
+
+        function handleDragEnd(e) {
+            if (!isDragging || !cardElement) return;
+
+            e.preventDefault();
+
+            const likeIndicator = document.querySelector('.swipe-indicator.like');
+            const nopeIndicator = document.querySelector('.swipe-indicator.nope');
+
+            if (likeIndicator) likeIndicator.classList.remove('visible');
+            if (nopeIndicator) nopeIndicator.classList.remove('visible');
+
+            // 判断是否滑出
+            if (Math.abs(currentX) > 100) {
+                // 滑出，准备下一张
+                cardElement.style.transition = 'transform 0.3s';
+                cardElement.style.transform = `translate(${currentX > 0 ? 500 : -500}px, ${currentY}px) rotate(${currentX * 0.1}deg)`;
+
+                setTimeout(() => {
+                    currentIndex++;
+                    showNextCard();
+                }, 300);
+            } else {
+                // 回弹
+                cardElement.style.transition = 'transform 0.3s';
+                cardElement.style.transform = 'translate(0, 0) rotate(0)';
+            }
+
+            isDragging = false;
+        }
+
+        function createIndicator(type) {
+            const div = document.createElement('div');
+            div.className = `swipe-indicator ${type}`;
+            div.innerText = type === 'like' ? '❤️ 想吃' : '❌ 不吃';
+            document.body.appendChild(div);
+            return div;
+        }
+
+        // ==================== 启动 ====================
+        startGeolocation();
+
+        // 刷新按钮
+        refreshBtn.addEventListener('click', () => {
+            window.location.reload();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>MKMS</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+
+    <style>
+        /* ==================== 全局重置 ==================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #f7f7fb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            position: fixed;
+            inset: 0;
+            color: #1a1a1a;
+            background: #f7f7fb;
+        }
+
+        /* ==================== 主聊天容器 ==================== */
+        .chat-container {
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            background: #f7f7fb;
+        }
+
+        .chat-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: white;
+            text-align: left;                    /* 左对齐给汉堡让位 */
+            font-size: 1.18rem;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            padding: 10px 18px 10px 60px;        /* 左边距60px避开汉堡按钮 */
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            background: #f7f7fb;
+            padding: 14px 14px 18px;
+        }
+
+        .chat-input {
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(247, 247, 251, 0.92);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-top: 1px solid rgba(0, 0, 0, 0.04);
+            padding: 8px 10px 4px;
+        }
+
+        @supports (padding: max(0px)) {
+            .chat-header {
+                padding-top: calc(env(safe-area-inset-top) + 6px);
+                padding-left: max(60px, env(safe-area-inset-left) + 40px);
+                padding-right: max(18px, env(safe-area-inset-right));
+                padding-bottom: 10px;
+            }
+            .chat-messages {
+                padding-left: max(14px, env(safe-area-inset-left));
+                padding-right: max(14px, env(safe-area-inset-right));
+            }
+            .chat-input {
+                padding-left: max(10px, env(safe-area-inset-left));
+                padding-right: max(10px, env(safe-area-inset-right));
+                padding-bottom: max(2px, env(safe-area-inset-bottom));
+            }
+        }
+
+        /* ==================== 消息气泡 ==================== */
+        .message {
+            width: 100%;
+            margin-bottom: 18px;
+            animation: fadeIn 0.22s ease-out;
+        }
+
+        .message-content {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.62;
+            font-size: 16px;
+        }
+
+        .message-text {
+            width: 100%;
+        }
+
+        .message-time {
+            font-size: 12px;
+            line-height: 1;
+            opacity: 0.88;
+            margin-top: 8px;
+            white-space: nowrap;
+        }
+
+        .send {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .send .message-content {
+            max-width: min(80%, 560px);
+            padding: 13px 16px 10px;
+            border-radius: 22px 8px 22px 22px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.22);
+        }
+
+        .send .message-time {
+            text-align: right;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .send .message-content code {
+            background: rgba(255, 255, 255, 0.18);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 6px;
+        }
+
+        .receive {
+            display: block;
+        }
+
+        .receive .message-content {
+            width: 100%;
+            max-width: 100%;
+            display: block;
+            padding: 0 2px;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            color: #1a1a1a;
+            box-shadow: none;
+        }
+
+        .receive .message-time {
+            text-align: left;
+            color: #8e8e98;
+        }
+
+        /* ==================== Markdown 样式 ==================== */
+        .message-content p {
+            margin: 0.68em 0;
+        }
+
+        .message-content ul,
+        .message-content ol {
+            margin: 0.68em 0 0.68em 1.4em;
+        }
+
+        .message-content li {
+            margin: 0.28em 0;
+        }
+
+        .message-content a {
+            color: #4f63d9;
+            text-decoration: none;
+        }
+
+        .message-content strong {
+            font-weight: 700;
+        }
+
+        .message-content code {
+            font-family: "SF Mono", Monaco, "Courier New", monospace;
+            font-size: 0.92em;
+            background: rgba(0, 0, 0, 0.05);
+            padding: 2px 5px;
+            border-radius: 6px;
+        }
+
+        .message-content pre {
+            background: #ffffff;
+            padding: 14px;
+            border-radius: 14px;
+            overflow-x: auto;
+            border: 1px solid #ececf3;
+            margin: 12px 0;
+            max-width: 100%;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+        }
+
+        .message-content pre code {
+            background: transparent;
+            padding: 0;
+            border: none;
+            white-space: pre;
+        }
+
+        /* ==================== 输入框和按钮 ==================== */
+        .chat-input textarea {
+            flex: 1;
+            min-height: 42px;
+            max-height: 120px;
+            resize: none;
+            outline: none;
+            border: 1px solid #e3e5ec;
+            border-radius: 22px;
+            background: #ffffff;
+            padding: 10px 15px;
+            font-size: 16px;
+            line-height: 1.35;
+            font-family: inherit;
+            -webkit-appearance: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+        }
+
+        .chat-input textarea:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.10);
+        }
+
+        .send-btn {
+            width: 44px;
+            height: 44px;
+            flex-shrink: 0;
+            border: none;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.28);
+            transition: transform 0.18s, opacity 0.2s, box-shadow 0.2s;
+        }
+
+        .send-btn:active {
+            transform: scale(0.95);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* ==================== 打字指示器 ==================== */
+        .typing {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 16px;
+            padding: 4px 4px 2px;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+
+        .typing span {
+            width: 8px;
+            height: 8px;
+            background: #9880ff;
+            border-radius: 50%;
+            display: inline-block;
+            opacity: 0.6;
+            animation: typingBounce 1.4s infinite;
+        }
+
+        .typing span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        /* ==================== 流式动画 ==================== */
+        .streaming .message-content {
+            position: relative;
+        }
+
+        .streaming .message-content::after {
+            content: "✨";
+            position: absolute;
+            right: -16px;
+            top: 8px;
+            font-size: 14px;
+            animation: sparkle 1s infinite;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 0;
+            background: transparent;
+        }
+
+        /* ==================== 加载页 ==================== */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+            text-align: center;
+            transition: opacity 0.5s;
+        }
+
+        #loading-overlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-content {
+            animation: pulse 2s infinite;
+        }
+
+        .loading-content p {
+            font-size: 1.2rem;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        .loading-content small {
+            display: block;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        /* ==================== 汉堡菜单 ==================== */
+        .menu-toggle {
+            position: fixed;
+            top: 8px;
+            left: 14px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.2s;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .menu-toggle:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .menu-toggle svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            z-index: 40;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease;
+        }
+
+        .sidebar-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            width: 260px;
+            height: 100%;
+            background: white;
+            z-index: 50;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.15);
+            transition: left 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            border-top-right-radius: 24px;
+            border-bottom-right-radius: 24px;
+            overflow: hidden;
+        }
+
+        .sidebar.open {
+            left: 0;
+        }
+
+        .sidebar-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 48px 20px 28px;
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-header small {
+            display: block;
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-top: 6px;
+            font-weight: 400;
+        }
+
+        .sidebar-menu {
+            flex: 1;
+            padding: 16px 8px;
+            overflow-y: auto;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            margin: 4px 0;
+            border-radius: 18px;
+            color: #333;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background 0.18s;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .sidebar-item:active {
+            background: #f0f0f8;
+        }
+
+        .sidebar-item svg {
+            width: 22px;
+            height: 22px;
+            fill: #667eea;
+            opacity: 0.8;
+        }
+
+        .sidebar-item span {
+            flex: 1;
+        }
+
+        .sidebar-footer {
+            padding: 20px 18px;
+            border-top: 1px solid #efefef;
+            font-size: 0.8rem;
+            color: #999;
+            text-align: center;
+        }
+
+        /* ==================== 动画 ==================== */
+        @keyframes typingBounce {
+            0%, 100% {
+                transform: translateY(0);
+                opacity: 0.6;
+            }
+            50% {
+                transform: translateY(-6px);
+                opacity: 1;
+            }
+        }
+
+        @keyframes sparkle {
+            0%, 100% {
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.3;
+                transform: scale(0.9);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 加载页 -->
+    <div id="loading-overlay">
+        <div class="loading-content">
+            <p>MKMS 正在加载</p>
+            <small>请稍后</small>
+        </div>
+    </div>
+
+    <!-- 汉堡菜单按钮 -->
+    <div class="menu-toggle" id="menuToggle">
+        <svg viewBox="0 0 24 24">
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"></path>
+        </svg>
+    </div>
+
+    <!-- 侧边栏遮罩 -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- 侧边栏 -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            MKMS
+            <small>v2.5 · Morgan</small>
+        </div>
+        <div class="sidebar-menu">
+            <!-- Summer吃点啥 -->
+            <div class="sidebar-item" id="menuSummerEat">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-10.5v-2h2v2h-2zm0 7v-5h2v5h-2z"></path>
+                    <circle cx="12" cy="16" r="1.5"></circle>
+                </svg>
+                <span>Summer吃点啥</span>
+            </div>
+
+            <!-- 占位菜单项 -->
+            <div class="sidebar-item">
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12z"></path>
+                    <path d="M7 9h2v2H7zm4 0h6v2h-6z"></path>
+                </svg>
+                <span>待开发</span>
+            </div>
+            <div class="sidebar-item">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path>
+                </svg>
+                <span>设置</span>
+            </div>
+        </div>
+        <div class="sidebar-footer">
+            © 2026 MKMS · 125工程
+        </div>
+    </div>
+
+    <!-- 主聊天界面 -->
+    <div class="chat-container">
+        <div class="chat-header">MKMS</div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message receive">
+                <div class="message-content">
+                    <div class="message-text">你好</div>
+                    <div class="message-time">现在</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input">
+            <textarea id="messageInput" placeholder="说点什么..." rows="1"></textarea>
+            <button class="send-btn" id="sendBtn" type="button">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+    (() => {
+        // 防止多次初始化
+        if (window.__MKMS_CHAT_INITED__) {
+            console.warn('⚠️ 聊天模块已初始化，跳过重复执行');
+            return;
+        }
+        window.__MKMS_CHAT_INITED__ = true;
+
+        // 设置 marked 选项
+        marked.setOptions({
+            gfm: true,
+            breaks: true,
+            tables: true
+        });
+
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        let isStreaming = false;
+        let abortController = null;
+        let currentReplyDiv = null;
+        let currentContentDiv = null;
+        let currentTimeDiv = null;
+
+        // 隐藏加载页
+        setTimeout(() => {
+            if (loadingOverlay) loadingOverlay.classList.add('fade-out');
+        }, 500);
+
+        function formatTime(date) {
+            return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        }
+
+        function escapeHtml(unsafe) {
+            return String(unsafe || '')
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function scrollToBottom() {
+            requestAnimationFrame(() => {
+                if (!chatMessages) return;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
+        }
+
+        function highlightAllCodeBlocks() {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        function addUserMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message send';
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="message-text">${escapeHtml(text)}</div>
+                    <div class="message-time">${formatTime(new Date())}</div>
+                </div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function addAssistantMessage(text) {
+            const replyDiv = document.createElement('div');
+            replyDiv.className = 'message receive';
+            replyDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="message-text">${marked.parse(text || '')}</div>
+                    <div class="message-time">${formatTime(new Date())}</div>
+                </div>
+            `;
+            chatMessages.appendChild(replyDiv);
+            highlightAllCodeBlocks();
+            scrollToBottom();
+        }
+
+        function createReplyBubble() {
+            if (currentReplyDiv) {
+                currentReplyDiv.remove();
+                currentReplyDiv = null;
+                currentContentDiv = null;
+                currentTimeDiv = null;
+            }
+
+            currentReplyDiv = document.createElement('div');
+            currentReplyDiv.className = 'message receive streaming';
+
+            currentContentDiv = document.createElement('div');
+            currentContentDiv.className = 'message-text';
+
+            currentTimeDiv = document.createElement('div');
+            currentTimeDiv.className = 'message-time';
+            currentTimeDiv.textContent = formatTime(new Date());
+
+            const contentWrap = document.createElement('div');
+            contentWrap.className = 'message-content';
+            contentWrap.appendChild(currentContentDiv);
+            contentWrap.appendChild(currentTimeDiv);
+
+            currentReplyDiv.appendChild(contentWrap);
+            chatMessages.appendChild(currentReplyDiv);
+            scrollToBottom();
+        }
+
+        function showTypingIndicator() {
+            removeTypingIndicator();
+            const typing = document.createElement('div');
+            typing.className = 'typing';
+            typing.id = 'typing-indicator';
+            typing.innerHTML = '<span></span><span></span><span></span>';
+            chatMessages.appendChild(typing);
+            scrollToBottom();
+        }
+
+        function removeTypingIndicator() {
+            const typing = document.getElementById('typing-indicator');
+            if (typing) typing.remove();
+        }
+
+        async function loadChatHistory() {
+            try {
+                const response = await fetch('/api/history');
+                const data = await response.json();
+
+                if (!data.ok || !Array.isArray(data.messages)) return;
+
+                chatMessages.innerHTML = '';
+
+                for (const msg of data.messages) {
+                    if (msg.role === 'user') {
+                        addUserMessage(msg.content);
+                    } else {
+                        addAssistantMessage(msg.content);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ 加载历史记录失败:', error);
+            }
+        }
+
+        async function streamChat(message) {
+            isStreaming = true;
+            abortController = new AbortController();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message }),
+                    signal: abortController.signal
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                removeTypingIndicator();
+                createReplyBubble();
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let fullReply = '';
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const rawLine of lines) {
+                        const line = rawLine.trim();
+                        if (!line.startsWith('data:')) continue;
+
+                        const data = line.slice(5).trim();
+                        if (!data || data === '[DONE]') continue;
+
+                        try {
+                            const parsed = JSON.parse(data);
+                            const content = parsed.content || '';
+                            if (!content) continue;
+
+                            fullReply += content;
+
+                            if (currentContentDiv) {
+                                currentContentDiv.innerHTML = marked.parse(fullReply);
+                                highlightAllCodeBlocks();
+                                scrollToBottom();
+                            }
+                        } catch (err) {
+                            console.error('❌ SSE 解析失败:', err, data);
+                        }
+                    }
+                }
+
+                if (buffer.trim().startsWith('data:')) {
+                    const data = buffer.trim().slice(5).trim();
+                    if (data && data !== '[DONE]') {
+                        try {
+                            const parsed = JSON.parse(data);
+                            const content = parsed.content || '';
+                            if (content) {
+                                fullReply += content;
+                                if (currentContentDiv) {
+                                    currentContentDiv.innerHTML = marked.parse(fullReply);
+                                    highlightAllCodeBlocks();
+                                    scrollToBottom();
+                                }
+                            }
+                        } catch (err) {
+                            console.error('❌ 尾包解析失败:', err, data);
+                        }
+                    }
+                }
+
+                if (currentReplyDiv) {
+                    currentReplyDiv.classList.remove('streaming');
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('❌ 流式失败:', error);
+                    removeTypingIndicator();
+
+                    if (!currentReplyDiv) createReplyBubble();
+                    if (currentContentDiv) {
+                        currentContentDiv.innerHTML = '💔 网络不太好，再试一次嘛 ~';
+                    }
+                }
+            } finally {
+                isStreaming = false;
+                abortController = null;
+                currentReplyDiv = null;
+                currentContentDiv = null;
+                currentTimeDiv = null;
+                if (sendBtn) sendBtn.disabled = false;
+            }
+        }
+
+        async function sendMessage() {
+            const messageText = messageInput.value.trim();
+            if (!messageText || isStreaming) return;
+
+            addUserMessage(messageText);
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            if (sendBtn) sendBtn.disabled = true;
+            showTypingIndicator();
+
+            await streamChat(messageText);
+        }
+
+        // 事件绑定
+        if (messageInput) {
+            messageInput.addEventListener('input', function () {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+
+            if (messageInput._mkmsEnterHandler) {
+                messageInput.removeEventListener('keydown', messageInput._mkmsEnterHandler);
+            }
+
+            messageInput._mkmsEnterHandler = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            };
+            messageInput.addEventListener('keydown', messageInput._mkmsEnterHandler);
+        }
+
+        if (sendBtn) {
+            sendBtn.type = 'button';
+            if (sendBtn._mkmsClickHandler) {
+                sendBtn.removeEventListener('click', sendBtn._mkmsClickHandler);
+            }
+            sendBtn._mkmsClickHandler = () => sendMessage();
+            sendBtn.addEventListener('click', sendBtn._mkmsClickHandler);
+        }
+
+        const parentForm = sendBtn?.closest('form') || messageInput?.closest('form');
+        if (parentForm) {
+            parentForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                sendMessage();
+            });
+        }
+
+        // ==================== 侧边栏菜单逻辑 ====================
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const sidebar = document.getElementById('sidebar');
+        const menuSummerEat = document.getElementById('menuSummerEat');
+
+        function openSidebar() {
+            sidebar.classList.add('open');
+            sidebarOverlay.classList.add('active');
+        }
+
+        function closeSidebar() {
+            sidebar.classList.remove('open');
+            sidebarOverlay.classList.remove('active');
+        }
+
+        menuToggle.addEventListener('click', openSidebar);
+        sidebarOverlay.addEventListener('click', closeSidebar);
+
+        // 触摸滑动关闭
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!sidebar.classList.contains('open')) return;
+            const touchX = e.touches[0].clientX;
+            const deltaX = touchX - touchStartX;
+            if (deltaX > 30) closeSidebar();
+        });
+
+        // Summer吃点啥 - 先关菜单再跳转
+        menuSummerEat.addEventListener('click', () => {
+            closeSidebar();
+            window.location.href = '/meal_decide';
+        });
+
+        // 启动
+        loadChatHistory();
+    })();
+    </script>
+</body>
+</html>
