@@ -237,11 +237,12 @@ def unified_search(query: str, **kwargs) -> List[Dict]:
 
 
 if __name__ == "__main__":
+    query = f"Donald Guilmette"
+
     r = UnifiedRetriever()
-    print("📊 统计:", r.get_stats())
-    
-    results = r.search("税务", top_k=5)
-    print(f"\n🔍 搜索 '税务': {len(results)} 条结果")
+
+    results = r.search(query, top_k=5)
+    print(f"\n🔍 搜索 '{query}': {len(results)} 条结果")
     for res in results:
         type_icon = "📄" if res["type"] == "document" else "📧"
         print(f"  {type_icon} {res.get('subject', res.get('source', '未知'))} (score={res['score']:.3f})")
